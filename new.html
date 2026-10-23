@@ -699,11 +699,13 @@ function figure(f,label){
 /* ───────── 요약 카드 ───────── */
 function renderCards(){
   const chips=$('#card-chips');
-  chips.innerHTML=`<button class="chip" aria-pressed="${S.cardCh===null}" data-cc="">전체</button>`+DATA.chapters.map(c=>`<button class="chip" aria-pressed="${S.cardCh===c.no}" data-cc="${c.no}">${c.no}장</button>`).join('');
-  const list=DATA.chapters.filter(c=>S.cardCh===null||c.no===S.cardCh);
+  const sel=S.cardCh;/* null = 전체, 배열 = 고른 장들(여러 개) */
+  chips.innerHTML=`<button class="chip" aria-pressed="${!sel}" data-cc="">전체</button>`+DATA.chapters.map(c=>`<button class="chip" aria-pressed="${!!sel&&sel.includes(c.no)}" data-cc="${c.no}">${c.no}장 ${esc(shortT(c.title))}</button>`).join('')
+    +(sel?`<button class="btn sm" data-solvesel="1">고른 장 문제 풀기</button>`:'');
+  const list=DATA.chapters.filter(c=>!sel||sel.includes(c.no));
   if(!list.length){$('#cards').innerHTML='<div class="empty">아직 자료가 없음. 시작하기의 프롬프트로 만든 JSON을 자료 넣기에 붙여넣을 것.</div>';return}
   const ER=DATA.errata||[];
-  const erHtml=ER.length&&S.cardCh===null?`<details class="errata"><summary><b>자료 표기 확인 ${ER.length}건</b><span class="muted">  강의자료의 오기 · 서로 다른 표기와 맞는 것으로 판단한 내용</span></summary>
+  const erHtml=ER.length&&!sel?`<details class="errata"><summary><b>자료 표기 확인 ${ER.length}건</b><span class="muted">  강의자료의 오기 · 서로 다른 표기와 맞는 것으로 판단한 내용</span></summary>
     <div class="er-list">${ER.map(e=>`<div class="er"><div class="er-h"><span class="num">${esc(e.page)}</span>${e.confidence?`<span class="er-c">확신도 ${esc(e.confidence)}</span>`:''}</div>
       <div><span class="lbl" style="color:var(--ink-muted)">자료</span>  ${fmt(e.material)}</div>
       <div class="er-j"><span class="lbl">판단</span>  ${fmt(e.judgement)}</div>
@@ -726,7 +728,8 @@ function renderCards(){
       </div>`).join('')}</div>`}).join('');
 }
 document.addEventListener('click',e=>{
-  const cc=e.target.closest('[data-cc]');if(cc){S.cardCh=cc.dataset.cc===''?null:+cc.dataset.cc;renderCards()}
+  const cc=e.target.closest('[data-cc]');if(cc){const v=cc.dataset.cc;if(v===''){S.cardCh=null}else{const n=+v;let a=S.cardCh?[...S.cardCh]:[];a=a.includes(n)?a.filter(x=>x!==n):[...a,n].sort((x,y)=>x-y);S.cardCh=a.length&&a.length<DATA.chapters.length?a:null}renderCards()}
+  const ss=e.target.closest('[data-solvesel]');if(ss&&S.cardCh){S.chs=[...S.cardCh];S.mode='mix';S.cur=null;go('quiz')}
   const sv=e.target.closest('[data-solve]');if(sv){S.chs=[+sv.dataset.solve];S.mode='mix';S.cur=null;go('quiz')}
 });
 
