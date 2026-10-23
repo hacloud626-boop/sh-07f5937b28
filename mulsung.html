@@ -196,6 +196,14 @@ svg .hatch{stroke:var(--ink-faint);stroke-width:1}
 .result .rt{font-weight:700}
 .result.ok .rt{color:var(--green)} .result.bad .rt{color:var(--red)} .result.part .rt{color:var(--orange)}
 .essay textarea{width:100%;min-height:130px;border:1px solid var(--hairline);border-radius:var(--r-xs);background:var(--surface);padding:12px}
+.peek{border:1px solid var(--hairline);border-radius:var(--r-md);background:var(--surface);font-size:14.5px}
+.peek>summary{white-space:nowrap;cursor:pointer;list-style:none;padding:10px 14px;font-weight:600;color:var(--primary);display:flex;align-items:center;gap:6px;user-select:none}
+.peek>summary::-webkit-details-marker{display:none}
+.peek>summary::before{content:'▸';font-size:12px;transition:transform .15s}
+.peek[open]>summary::before{transform:rotate(90deg)}
+.peek>summary .hint{margin-left:auto;font-weight:500;font-size:12.5px;color:var(--ink-muted)}
+.peek .pk{padding:0 14px 12px;display:flex;flex-direction:column;gap:8px}
+.result .peek{background:var(--surface)}
 .model{border:1px solid var(--hairline);border-radius:var(--r-md);padding:12px 14px;font-size:14.5px}
 .kp{display:flex;flex-direction:column;gap:6px;margin-top:6px}
 .kp label{display:flex;gap:8px;align-items:flex-start;font-size:14px}
@@ -677,6 +685,10 @@ function pick(){
   const rest=qs.filter(q=>q.id!==S.lastId&&!inQ.has(q.id)).sort((a,b)=>(PROG[a.id]?.due||0)-(PROG[b.id]?.due||0));
   return {q:rest[0]||qs[0],why:'복습 전 미리 풀기',exhausted:true};
 }
+/* 해설 속 보기 번호(①②…)는 원래 순서 기준 → 화면에 섞어 보여 준 순서로 바꿔 표시. 줄 맨 앞 번호는 풀이 단계라 그대로 둠 */
+const CIRC='①②③④⑤⑥';
+function remapC(t,perm){if(!perm||!t)return t;return String(t).replace(/(^|\n)(\s*)([①-⑥])|([①-⑥])/g,(m,a,b,c,d)=>{if(c)return m;const k=perm.indexOf(CIRC.indexOf(d));return k<0?m:CIRC[k]})}
+function chList(q){return q.type==='mcq'?`<div class="w muted">${q.choices.map((c,i)=>CIRC[i]+' '+fmt(c)).join('<br>')}</div>`:''}
 function shuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function next(){
   const p=pick();S.phase='answer';S.sel=null;S.conf=null;
@@ -717,6 +729,10 @@ function drawQ(){
     h+=`<div class="essay"><textarea id="essay-in" placeholder="아는 만큼 적기. 모르면 모름." ${graded||S.phase==='reveal'?'readonly':''}>${esc(S.cur.essay)}</textarea></div>`;
   }
   const flag=`<button class="flagbtn" data-flag="1">문제 오류 신고</button>`;
+  if(S.phase==='answer'||S.phase==='conf'){
+    const ansTxt=q.type==='mcq'?`<div><b>정답  ${'①②③④⑤⑥'[perm.indexOf(q._ans)]}</b> ${fmt(q.choices[q._ans])}</div>`:q.type==='ox'?`<div><b>정답  ${q._ans}</b></div>`:`<div><span class="lbl">모범답안</span><div>${fmt(q.model||q.answer||'')}</div></div>`;
+    h+=`<details class="peek" id="peek" ${S.cur.peekOpen?'open':''}><summary>답과 해설 보기<span class="hint">${S.cur.peeked?'본 문제는 찍음으로 기록':'누르면 펼침'}</span></summary><div class="pk">${ansTxt}${q.why?`<div>${fmt(remapC(q.why,perm))}</div>`:''}</div></details>`;
+  }
   if(S.phase==='answer'&&q.type!=='essay')h+=`<div class="qnav"><button class="btn sm" data-dk="1">모르겠음</button>${flag}</div>`;
   if(S.phase==='answer'&&q.type==='essay')h+=`<div class="conf act"><b>다 썼으면 확신도</b>${['sure','unsure','guess'].map(k=>`<button class="btn sm" data-conf="${k}">${CONF[k]}</button>`).join('')}<button class="btn sm" data-dk="1">모르겠음</button></div><div class="qnav"><span></span>${flag}</div>`;
   if(S.phase==='conf')h+=`<div class="conf act"><b>얼마나 확신?</b>${['sure','unsure','guess'].map(k=>`<button class="btn sm" data-conf="${k}">${CONF[k]}</button>`).join('')}</div>`;
@@ -730,11 +746,12 @@ function drawQ(){
     const pp=PROG[q.id],nx=pp.box?`${Math.round(INTERVAL[pp.box]/H)}시간 뒤 다시 나옴`:'몇 문제 뒤 다시 나옴';
     h+=`<div class="result ${r}"><div class="rt">${rt}  <span class="muted" style="font-weight:500">확신도 ${CONF[S.conf]}  ${nx}</span></div>
       ${q.type==='mcq'?`<div>정답  ${fmt(q.choices[q._ans])}</div>`:q.type==='ox'?`<div>정답  ${q._ans}</div>`:''}
-      ${q.why?`<div>${fmt(q.why)}</div>`:''}
+      ${q.why?`<details class="peek" open><summary>해설<span class="hint">누르면 접힘</span></summary><div class="pk"><div>${fmt(remapC(q.why,perm))}</div></div></details>`:''}
       ${r!=='ok'&&S.conf==='sure'?'<div><b>확신했는데 틀림.</b> 오답 노트 맨 위에 올라감.</div>':''}</div>
       <div class="qnav act">${flag}<button class="btn pri" id="btn-next">다음 문제</button></div>`;
   }
   box.innerHTML=h;
+  const pk=$('#peek');if(pk)pk.addEventListener('toggle',()=>{S.cur.peekOpen=pk.open;if(pk.open&&!S.cur.peeked){S.cur.peeked=true;const hn=pk.querySelector('.hint');if(hn)hn.textContent='본 문제는 찍음으로 기록'}});
   const ta=$('#essay-in');if(ta)ta.addEventListener('input',e=>S.cur.essay=e.target.value);
 }
 function record(q,result,conf,requeue=true){
@@ -746,6 +763,7 @@ function record(q,result,conf,requeue=true){
   p.due=Date.now()+INTERVAL[p.box];PROG[q.id]=p;
 }
 function grade(result,conf){
+  if(S.cur.peeked&&(conf==='sure'||conf==='unsure'))conf='guess';
   const q=S.cur.q;record(q,result,conf);
   S.count++;S.n++;if(result==='ok')S.ok++;S.lastId=q.id;
   S.conf=conf;S.cur.result=result;S.phase='graded';save();saveSess();renderHead();drawQ();
@@ -823,7 +841,7 @@ function drawExamResult(){
     <div class="score num"><b>${pct}점</b><span class="muted">${ids.length}문항 중 ${ok}개 정답  소요 ${used}분 / 제한 ${E.limit}분</span></div>
     <div class="tw"><table class="list num"><tr><th>장</th><th>정답</th><th>정답률</th></tr>${Object.keys(by).sort((a,b)=>a-b).map(c=>`<tr><td>${esc(chName(+c))}</td><td>${by[c][0]} / ${by[c][1]}</td><td>${Math.round(by[c][0]/by[c][1]*100)}%</td></tr>`).join('')}</table></div>
     ${wrong.length?`<div class="lbl" style="margin-top:6px">틀린 문제 ${wrong.length}</div>${wrong.map(id=>{const q=qById(id),a=E.ans[id];const t=v=>q.type==='mcq'?(v===undefined?'미응답':q.choices[v]):(v??'미응답');
-      return `<div class="witem"><div class="q">${fmt(q.q)}</div><div class="w">내 답  ${fmt(t(a))}</div><div class="a">정답  ${fmt(t(q._ans))}</div>${q.why?`<div class="w">${fmt(q.why)}</div>`:''}</div>`}).join('')}`:'<div class="result ok"><div class="rt">전부 정답</div></div>'}
+      return `<div class="witem"><div class="q">${fmt(q.q)}</div><div class="w">내 답  ${fmt(t(a))}</div><div class="a">정답  ${q.type==='mcq'?CIRC[E.perm[id].indexOf(q._ans)]+' ':''}${fmt(t(q._ans))}</div>${q.why?`<details class="peek"><summary>해설<span class="hint">누르면 펼침</span></summary><div class="pk"><div>${fmt(remapC(q.why,E.perm[id]))}</div></div></details>`:''}</div>`}).join('')}`:'<div class="result ok"><div class="rt">전부 정답</div></div>'}
     <div class="qnav act"><button class="btn sm" id="ex-wrong">오답만 풀기</button><button class="btn pri" id="ex-again">새 모의고사</button></div>`;
 }
 
@@ -879,7 +897,7 @@ function renderWrong(){
     ${fl.map(q=>item(q,true)).join('')}</div>`;
   $('#wrong').innerHTML=h||'<div class="empty">아직 오답이 없음. 문제를 풀면 틀린 문제가 확신도 순으로 쌓임.</div>';
   function item(q,isFl){const p=PROG[q.id];const ans=q.type==='mcq'?q.choices[q._ans]:q.type==='ox'?q._ans:(q.model||'');
-    return `<div class="witem"><div class="muted num" style="font-size:12.5px">${esc(chName(q._ch))}  ${esc(q.source||'')}${p.bad?`  틀린 횟수 ${p.bad}`:''}</div><div class="q">${fmt(q.q)}</div><div class="a">정답  ${fmt(ans)}</div>${q.why?`<div class="w">${fmt(q.why)}</div>`:''}${isFl?`<div><button class="btn sm" data-unflag="${q.id}">신고 취소</button></div>`:''}</div>`}
+    return `<div class="witem"><div class="muted num" style="font-size:12.5px">${esc(chName(q._ch))}  ${esc(q.source||'')}${p.bad?`  틀린 횟수 ${p.bad}`:''}</div><div class="q">${fmt(q.q)}</div>${chList(q)}<details class="peek"><summary>답과 해설<span class="hint">누르면 펼침</span></summary><div class="pk"><div class="a">정답  ${q.type==='mcq'?CIRC[q._ans]+' ':''}${fmt(ans)}</div>${q.why?`<div>${fmt(q.why)}</div>`:''}</div></details>${isFl?`<div><button class="btn sm" data-unflag="${q.id}">신고 취소</button></div>`:''}</div>`}
 }
 function fixPrompt(){
   const L=allQ().filter(q=>PROG[q.id]?.flag).map(q=>({id:q.id,type:q.type,q:q.q,choices:q.choices,answer:q.type==='mcq'?q._ans+1:q.type==='ox'?q._ans:undefined,model:q.model,why:q.why,source:q.source}));
